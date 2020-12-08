@@ -30,10 +30,8 @@ func getCancelChan() chan struct{} {
 
 func main() {
 	r := mux.NewRouter()
-	// Routes consist of a path and a handler function.
 	r.HandleFunc("/", JSONHandler).Methods("POST")
 
-	// Bind to a port and pass our router in
 	serverPort := helper.GetEnv("SERVER_PORT")
 	log.Fatal(http.ListenAndServe(":"+serverPort, r))
 }
