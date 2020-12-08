@@ -42,6 +42,10 @@ The datapoints are labeled starting with their namespace like the following exam
 
 `strategies_0x25fAcA21dd2Ad7eDB3a027d543e617496820d8d6_balanceOf` references the `balanceOf` field of the `StrategyVaultUSDC`
 
+There is a `grafana_dashboard.json` file that can be loaded into the JSON model of grafana containing the following metrics:
+
+![grafana_dashboard.png](https://raw.githubusercontent.com/mosdefi/web3-batch-exporter/main/grafana/grafana_dashboard.png)
+
 
 ## Control flow
 The control flow is to POST a JSON to the service which registers a worker that runs the posted queries every minute until another request arrives.
