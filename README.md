@@ -1,6 +1,6 @@
 # web3-batch-exporter
 
-This is a **highly experimental** (:see_no_evil:) service that continuously tracks state about any [yEarn](https://yearn.finance) contract to [prometheus](https://prometheus.io):
+This is a **highly experimental** (:see_no_evil:) service that continuously tracks state about any [yEarn](https://yearn.finance) contract and pushes it to [prometheus](https://prometheus.io).
 
 It integrates with the following services:
 - [web3-batch-service](https://github.com/mosdefi/web3-batch-service)
@@ -10,7 +10,7 @@ It integrates with the following services:
 By default, the service is exposing a JSON endpoint on port `8000` which can be used as a proxy and mini-job system for running web3-batch-call requests.
 
 ## Configuration
-To demonstrate it's usage, there is `stack` dir with a `docker-compose.yml` file which contains all the cookies.
+To demonstrate its usage, there is `stack` dir with a `docker-compose.yml` file which contains all the cookies.
 
 First it's necessary to provide the two ENV variables:
 - `PROVIDER_URL`
