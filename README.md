@@ -26,7 +26,9 @@ To start the request with all yearn vaults and strategies there is a `stack/samp
 
 `cd stack && ./post.sh`
 
-After a while there will messages like the following every minute appearing:
+Once started, there will be a new batched call and a push to prometheus with the results every minute.
+
+You can CTRL-C this safely, the worker will continue querying and pushing data in the background.
 
 ```
 calling web3-batch-service...
