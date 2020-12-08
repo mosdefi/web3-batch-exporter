@@ -1,0 +1,4 @@
+.env
+stack
+*.json
+*.sh

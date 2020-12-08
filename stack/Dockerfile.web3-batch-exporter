@@ -1,0 +1,7 @@
+FROM golang
+
+RUN mkdir -p /app
+WORKDIR /app
+RUN git clone https://github.com/mosdefi/web3-batch-exporter.git
+WORKDIR /app/cmd/web3-batch-exporter
+CMD go run main.go
