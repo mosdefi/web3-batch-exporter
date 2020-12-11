@@ -4,9 +4,34 @@ import (
 	"math"
 	"reflect"
 	"strconv"
+	"sync"
 
 	"web3-batch-exporter/internal/helper"
+
+	"github.com/prometheus/client_golang/prometheus"
 )
+
+var once sync.Once
+
+var instance *DataMap
+
+func GetDataMap() *DataMap {
+	once.Do(func() {
+		if instance == nil {
+			instance = &DataMap{
+				Data:       make(map[string]*[]MetricMap),
+				Collectors: []prometheus.Collector{},
+			}
+		}
+	})
+	return instance
+}
+
+type DataMap struct {
+	mux        sync.Mutex
+	Data       map[string]*[]MetricMap
+	Collectors []prometheus.Collector
+}
 
 type Metric struct {
 	Name      string
@@ -21,13 +46,52 @@ type MetricMap struct {
 	Metrics map[string]*Metric
 }
 
-func ExtractData(response map[string]interface{}) map[string]*[]MetricMap {
-	data := make(map[string]*[]MetricMap)
+func (dataMap *DataMap) GetData(key string) *[]MetricMap {
+	dataMap.mux.Lock()
+	defer dataMap.mux.Unlock()
+	return dataMap.Data[key]
+}
 
+func (dataMap *DataMap) SetData(key string, data *[]MetricMap) {
+	dataMap.mux.Lock()
+	dataMap.Data[key] = data
+	dataMap.mux.Unlock()
+}
+
+func (dataMap *DataMap) GetNamespaces() []string {
+	dataMap.mux.Lock()
+	defer dataMap.mux.Unlock()
+
+	var namespaces = []string{}
+	for key, _ := range dataMap.Data {
+		namespaces = append(namespaces, key)
+	}
+	return namespaces
+}
+
+func (dataMap *DataMap) GetCollectors() []prometheus.Collector {
+	dataMap.mux.Lock()
+	defer dataMap.mux.Unlock()
+	return dataMap.Collectors
+}
+
+func (dataMap *DataMap) AddCollector(collector prometheus.Collector) {
+	dataMap.mux.Lock()
+	dataMap.Collectors = append(dataMap.Collectors, collector)
+	dataMap.mux.Unlock()
+}
+
+func (dataMap *DataMap) ResetCollectors() {
+	dataMap.mux.Lock()
+	dataMap.Collectors = []prometheus.Collector{}
+	dataMap.mux.Unlock()
+}
+
+func ExtractData(response map[string]interface{}, dataMap *DataMap) {
 	namespaces := extractNamespaces(response)
 	for _, ns := range namespaces {
 		nsMaps := []MetricMap{}
-		data[ns] = &nsMaps
+		dataMap.SetData(ns, &nsMaps)
 
 		values := response[ns]
 		for _, entry := range values.([]interface{}) {
@@ -44,7 +108,6 @@ func ExtractData(response map[string]interface{}) map[string]*[]MetricMap {
 			nsMaps = append(nsMaps, metricMap)
 
 			for k, v := range entry.(map[string]interface{}) {
-				//log.Println(k, v)
 				metric := extractMetric(v)
 				metric.Name = k
 				metrics[k] = metric
@@ -52,7 +115,6 @@ func ExtractData(response map[string]interface{}) map[string]*[]MetricMap {
 			scale(ns, metrics)
 		}
 	}
-	return data
 }
 
 func FindExportableMetrics(metricMap map[string]*Metric) []*Metric {
@@ -99,7 +161,6 @@ func extractMetric(value interface{}) *Metric {
 	var metric = Metric{}
 	switch v := value.(type) {
 	case []interface{}:
-		//log.Println(v)
 		first := v[0] // TODO implement all results not only the first one
 		inner := first.(map[string]interface{})["value"]
 
@@ -117,7 +178,6 @@ func extractMetric(value interface{}) *Metric {
 }
 
 func extractValueAndType(value interface{}) (interface{}, string) {
-	//log.Println("Trying to extract value and type for", value)
 	var floatType = reflect.TypeOf(float64(0))
 	var intType = reflect.TypeOf(int(0))
 	var stringType = reflect.TypeOf("")

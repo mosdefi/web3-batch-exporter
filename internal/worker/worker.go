@@ -2,13 +2,15 @@ package worker
 
 import (
 	"bytes"
-	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"time"
 	"web3-batch-exporter/internal/helper"
 	"web3-batch-exporter/internal/metric"
-	"web3-batch-exporter/internal/prometheus"
+	"web3-batch-exporter/internal/prom"
+
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 func startTicker(cancelChan chan struct{}, f func()) {
@@ -44,12 +46,22 @@ func callWeb3BatchService(payload []byte) []byte {
 	return body
 }
 
-func StartPolling(payload []byte, cancelChan chan struct{}) {
+func StartPolling(payload []byte, cancelChan chan struct{}, registry prometheus.Registerer) {
+	dataMap := metric.GetDataMap()
+
+	hasRegistered := false
 	startTicker(cancelChan, func() {
-		fmt.Println("calling web3-batch-service...")
+		log.Println("calling web3-batch-service...")
 		responseBytes := callWeb3BatchService(payload)
+		log.Println("parsing result from web3-batch-service...")
 		response := helper.ParseJSONResponse(responseBytes)
-		data := metric.ExtractData(response)
-		prometheus.PushToPrometheus(data)
+		log.Println("extracting data into dataMap...")
+		metric.ExtractData(response, dataMap)
+		if hasRegistered != true {
+			log.Println("registering prom collectors...")
+			prom.RegisterCollectors(dataMap, registry)
+			hasRegistered = true
+		}
+		log.Println("ticker started.")
 	})
 }

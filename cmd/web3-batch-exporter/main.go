@@ -8,9 +8,13 @@ import (
 	"web3-batch-exporter/internal/worker"
 
 	"github.com/gorilla/mux"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 var cancelChan = make(chan struct{})
+var registry *prometheus.Registry
+var router *mux.Router
 
 func JSONHandler(w http.ResponseWriter, r *http.Request) {
 	body, err := ioutil.ReadAll(r.Body)
@@ -19,7 +23,9 @@ func JSONHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "can't read body", http.StatusBadRequest)
 		return
 	}
-	worker.StartPolling(body, getCancelChan())
+	registry = prometheus.NewPedanticRegistry()
+	worker.StartPolling(body, getCancelChan(), registry)
+	router.Handle("/metrics", promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
 }
 
 func getCancelChan() chan struct{} {
@@ -29,9 +35,8 @@ func getCancelChan() chan struct{} {
 }
 
 func main() {
-	r := mux.NewRouter()
-	r.HandleFunc("/", JSONHandler).Methods("POST")
-
+	router = mux.NewRouter()
+	router.HandleFunc("/", JSONHandler).Methods("POST")
 	serverPort := helper.GetEnv("SERVER_PORT")
-	log.Fatal(http.ListenAndServe(":"+serverPort, r))
+	log.Fatal(http.ListenAndServe(":"+serverPort, router))
 }

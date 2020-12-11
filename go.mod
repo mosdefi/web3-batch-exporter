@@ -6,7 +6,7 @@ replace web3-batch-exporter/internal/helper => ./internal/helper
 
 replace web3-batch-exporter/internal/metric => ./internal/metric
 
-replace web3-batch-exporter/internal/prometheus => ./internal/prometheus
+replace web3-batch-exporter/internal/prom => ./internal/prom
 replace web3-batch-exporter/internal/worker => ./internal/worker
 
 
