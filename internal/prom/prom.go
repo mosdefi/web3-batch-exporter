@@ -1,6 +1,8 @@
 package prom
 
 import (
+	"time"
+
 	"github.com/prometheus/client_golang/prometheus"
 
 	"web3-batch-exporter/internal/metric"
@@ -48,7 +50,6 @@ func (collector Web3SliceCollector) Collect(ch chan<- prometheus.Metric) {
 				[]string{"namespace", "address"},
 				nil,
 			)
-
 			promMetric := prometheus.MustNewConstMetric(
 				desc,
 				prometheus.GaugeValue,
@@ -56,7 +57,13 @@ func (collector Web3SliceCollector) Collect(ch chan<- prometheus.Metric) {
 				namespace,
 				address,
 			)
-			ch <- promMetric
+
+			seconds := int64(dataMap.BlockInfo.Timestamp) * 1000
+			timestamp := time.Unix(0, seconds*int64(time.Second))
+			ch <- prometheus.NewMetricWithTimestamp(
+				timestamp,
+				promMetric,
+			)
 		}
 	}
 }

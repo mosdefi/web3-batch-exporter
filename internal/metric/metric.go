@@ -1,6 +1,7 @@
 package metric
 
 import (
+	"log"
 	"math"
 	"reflect"
 	"strconv"
@@ -8,6 +9,7 @@ import (
 
 	"web3-batch-exporter/internal/helper"
 
+	"github.com/mitchellh/mapstructure"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -29,6 +31,7 @@ func GetDataMap() *DataMap {
 
 type DataMap struct {
 	mux        sync.Mutex
+	BlockInfo  *BlockInfo
 	Data       map[string]*[]MetricMap
 	Collectors []prometheus.Collector
 }
@@ -46,15 +49,24 @@ type MetricMap struct {
 	Metrics map[string]*Metric
 }
 
+type BlockInfo struct {
+	Number    int64
+	Timestamp float64
+	Hash      string
+	GasLimit  int64
+	GasUsed   int64
+}
+
 func (dataMap *DataMap) GetData(key string) *[]MetricMap {
 	dataMap.mux.Lock()
 	defer dataMap.mux.Unlock()
 	return dataMap.Data[key]
 }
 
-func (dataMap *DataMap) SetData(key string, data *[]MetricMap) {
+func (dataMap *DataMap) SetData(key string, data *[]MetricMap, blockInfo *BlockInfo) {
 	dataMap.mux.Lock()
 	dataMap.Data[key] = data
+	dataMap.BlockInfo = blockInfo
 	dataMap.mux.Unlock()
 }
 
@@ -88,10 +100,10 @@ func (dataMap *DataMap) ResetCollectors() {
 }
 
 func ExtractData(response map[string]interface{}, dataMap *DataMap) {
-	namespaces := extractNamespaces(response)
+	namespaces, blockInfo := extractNamespacesAndBlockInfo(response)
 	for _, ns := range namespaces {
 		nsMaps := []MetricMap{}
-		dataMap.SetData(ns, &nsMaps)
+		dataMap.SetData(ns, &nsMaps, &blockInfo)
 
 		values := response[ns]
 		for _, entry := range values.([]interface{}) {
@@ -208,10 +220,18 @@ func extractValueAndType(value interface{}) (interface{}, string) {
 	return v.String(), "string"
 }
 
-func extractNamespaces(response map[string]interface{}) []string {
+func extractNamespacesAndBlockInfo(response map[string]interface{}) ([]string, BlockInfo) {
 	var namespaces = []string{}
+	var blockInfo BlockInfo
 	for key := range response {
-		namespaces = append(namespaces, key)
+		if key == "blockInfo" {
+			err := mapstructure.Decode(response[key], &blockInfo)
+			if err != nil {
+				log.Println(err)
+			}
+		} else {
+			namespaces = append(namespaces, key)
+		}
 	}
-	return namespaces
+	return namespaces, blockInfo
 }
