@@ -1,8 +1,8 @@
 version: '3.7'
 
 volumes:
-    prometheus_data: {}
     grafana_data: {}
+    victoria_metrics_data: {}
 
 networks:
   web3-batch-exporter:
@@ -32,47 +32,41 @@ services:
     ports:
       - 8000:8000
     links:
-    #  - alertmanager:alertmanager
       - web3-batch-service:web3-batch-service
     networks:
       - web3-batch-exporter
     restart: always
 
-  prometheus:
-    image: prom/prometheus:v2.23.0
+  vmagent:
+    image: victoriametrics/vmagent
     volumes:
       - ./prometheus/:/etc/prometheus/
-      - prometheus_data:/prometheus
     command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
-      - '--web.console.templates=/usr/share/prometheus/consoles'
-    ports:
-      - 9090:9090
+      - '-promscrape.config=/etc/prometheus/prometheus.yml'
+      - '-remoteWrite.url=http://victoria-metrics:8428/api/v1/write'
     links:
       - web3-batch-exporter:web3-batch-exporter
+      - victoria-metrics:victoria-metrics
+    depends_on:
+      - victoria-metrics
     networks:
       - web3-batch-exporter
     restart: always
 
-  #alertmanager:
-  #  image: prom/alertmanager
-  #  ports:
-  #    - 9093:9093
-  #  volumes:
-  #    - ./alertmanager/:/etc/alertmanager/
-  #  networks:
-  #    - yevents
-  #  restart: always
-  #  command:
-  #    - '--config.file=/etc/alertmanager/config.yml'
-  #   - '--storage.path=/alertmanager'
+  victoria-metrics:
+    image: victoriametrics/victoria-metrics:v1.49.0
+    volumes:
+      - victoria_metrics_data:/victoria-metrics-data
+    ports:
+      - 8428:8428
+    networks:
+      - web3-batch-exporter
+    restart: always
 
   grafana:
     image: grafana/grafana
     depends_on:
-      - prometheus
+      - victoria-metrics
     ports:
       - 3000:3000
     volumes:
