@@ -118,8 +118,7 @@ func (dataMap *DataMap) ResetCollectors() {
 	dataMap.mux.Unlock()
 }
 
-func (dataMap *DataMap) ToCSVSlices() []*slice.CSVSlice {
-	slices := []*slice.CSVSlice{}
+func (dataMap *DataMap) ToCSVSlices() {
 	namespaces := dataMap.GetNamespaces()
 	for _, namespace := range namespaces {
 		metricMaps := dataMap.GetData(namespace)
@@ -141,12 +140,9 @@ func (dataMap *DataMap) ToCSVSlices() []*slice.CSVSlice {
 			}
 
 			slice := dataMap.AddToSlice(key, row, format)
-
-			slices = append(slices, slice)
 			slice.SendInBatch()
 		}
 	}
-	return slices
 }
 
 func ExtractData(responseBytes []byte, dataMap *DataMap) {
