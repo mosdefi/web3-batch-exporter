@@ -1,6 +1,7 @@
 package metric
 
 import (
+	"fmt"
 	"log"
 	"math"
 	"reflect"
@@ -8,6 +9,7 @@ import (
 	"sync"
 
 	"web3-batch-exporter/internal/helper"
+	"web3-batch-exporter/internal/slice"
 
 	"github.com/mitchellh/mapstructure"
 	"github.com/prometheus/client_golang/prometheus"
@@ -22,6 +24,7 @@ func GetDataMap() *DataMap {
 		if instance == nil {
 			instance = &DataMap{
 				Data:       make(map[string]*[]MetricMap),
+				Slices:     make(map[string]*slice.CSVSlice),
 				Collectors: []prometheus.Collector{},
 			}
 		}
@@ -33,6 +36,7 @@ type DataMap struct {
 	mux        sync.Mutex
 	BlockInfo  *BlockInfo
 	Data       map[string]*[]MetricMap
+	Slices     map[string]*slice.CSVSlice
 	Collectors []prometheus.Collector
 }
 
@@ -55,6 +59,21 @@ type BlockInfo struct {
 	Hash      string
 	GasLimit  int64
 	GasUsed   int64
+}
+
+func (dataMap *DataMap) AddToSlice(key string, row string, format string) *slice.CSVSlice {
+	dataMap.mux.Lock()
+	defer dataMap.mux.Unlock()
+	s, ok := dataMap.Slices[key]
+	if !ok {
+		s = &slice.CSVSlice{
+			Format: format,
+			Rows:   []string{},
+		}
+		dataMap.Slices[key] = s
+	}
+	s.Rows = append(s.Rows, row)
+	return s
 }
 
 func (dataMap *DataMap) GetData(key string) *[]MetricMap {
@@ -99,7 +118,40 @@ func (dataMap *DataMap) ResetCollectors() {
 	dataMap.mux.Unlock()
 }
 
-func ExtractData(response map[string]interface{}, dataMap *DataMap) {
+func (dataMap *DataMap) ToCSVSlices() []*slice.CSVSlice {
+	slices := []*slice.CSVSlice{}
+	namespaces := dataMap.GetNamespaces()
+	for _, namespace := range namespaces {
+		metricMaps := dataMap.GetData(namespace)
+
+		for _, metricMap := range *metricMaps {
+			address := metricMap.Address
+			key := namespace + "#" + address
+
+			toExport := FindExportableMetrics(metricMap.Metrics)
+			row := fmt.Sprintf("%s,%s,%s", namespace, address, strconv.FormatFloat(dataMap.BlockInfo.Timestamp, 'f', -1, 64))
+
+			// https://github.com/VictoriaMetrics/VictoriaMetrics#how-to-import-csv-data
+			format := "1:label:namespace,2:label:address,3:time:unix_s"
+			formatIdx := 4
+			for _, metric := range toExport {
+				format += fmt.Sprintf(",%d:metric:%s", formatIdx, metric.Name)
+				row += fmt.Sprintf(",%f", metric.Value.(float64))
+				formatIdx += 1
+			}
+
+			slice := dataMap.AddToSlice(key, row, format)
+
+			slices = append(slices, slice)
+			slice.SendInBatch()
+		}
+	}
+	return slices
+}
+
+func ExtractData(responseBytes []byte, dataMap *DataMap) {
+	//log.Println("parsing result from web3-batch-service...")
+	response := helper.ParseJSONResponse(responseBytes)
 	namespaces, blockInfo := extractNamespacesAndBlockInfo(response)
 	for _, ns := range namespaces {
 		nsMaps := []MetricMap{}

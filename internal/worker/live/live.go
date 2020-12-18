@@ -1,10 +1,7 @@
-package worker
+package live
 
 import (
-	"bytes"
-	"io/ioutil"
 	"log"
-	"net/http"
 	"time"
 	"web3-batch-exporter/internal/helper"
 	"web3-batch-exporter/internal/metric"
@@ -30,33 +27,15 @@ func startTicker(cancelChan chan struct{}, f func()) {
 	}()
 }
 
-func callWeb3BatchService(payload []byte) []byte {
-	url := helper.GetEnv("WEB3_BATCH_SERVICE_URL")
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		panic(err)
-	}
-	defer resp.Body.Close()
-
-	body, _ := ioutil.ReadAll(resp.Body)
-	return body
-}
-
 func StartPolling(payload []byte, cancelChan chan struct{}, registry prometheus.Registerer) {
 	dataMap := metric.GetDataMap()
 
 	hasRegistered := false
 	startTicker(cancelChan, func() {
 		log.Println("calling web3-batch-service...")
-		responseBytes := callWeb3BatchService(payload)
-		log.Println("parsing result from web3-batch-service...")
-		response := helper.ParseJSONResponse(responseBytes)
+		responseBytes := helper.CallWeb3BatchService(payload, 0)
 		log.Println("extracting data into dataMap...")
-		metric.ExtractData(response, dataMap)
+		metric.ExtractData(responseBytes, dataMap)
 		if hasRegistered != true {
 			log.Println("registering prom collectors...")
 			prom.RegisterCollectors(dataMap, registry)

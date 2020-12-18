@@ -6,9 +6,14 @@ replace web3-batch-exporter/internal/helper => ./internal/helper
 
 replace web3-batch-exporter/internal/metric => ./internal/metric
 
+replace web3-batch-exporter/internal/slice => ./internal/slice
+
 replace web3-batch-exporter/internal/prom => ./internal/prom
 
-replace web3-batch-exporter/internal/worker => ./internal/worker
+replace web3-batch-exporter/internal/worker/live => ./internal/worker/live
+
+replace web3-batch-exporter/internal/worker/historical => ./internal/worker/historical
+
 
 require (
 	github.com/gorilla/mux v1.8.0 // indirect
