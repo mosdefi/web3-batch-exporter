@@ -1,13 +1,16 @@
 # web3-batch-exporter
 
-This is a **highly experimental** (:see_no_evil:) service that continuously tracks state about any [yEarn](https://yearn.finance) contract and pushes it to [prometheus](https://prometheus.io).
+This is a **highly experimental** (:see_no_evil:) service that reads current and historical state variables about any smart contract on the Ethererum blockchain and pushes them to a timeseries database. Currently it's using [victoria-metrics](https://github.com/VictoriaMetrics/VictoriaMetrics) as its datasink as this supports both live and historical data loads.
 
 It integrates with the following services:
-- [web3-batch-service](https://github.com/mosdefi/web3-batch-service)
-- [infura](https://infura.io)
-- [etherscan](https://etherscan.io)
+- [web3-batch-service](https://github.com/mosdefi/web3-batch-service) // node bridge to [web3-batch-call](https://github.com/x48-crypto/web3-batch-call)
+- [infura](https://infura.io) or [alchemy](https://alchemyapi.io/)    // JSON-RPC endpoint provider to Ethererum
+- [etherscan](https://etherscan.io)                                   // used to obtain ABIs
 
-By default, the service is exposing a JSON endpoint on port `8000` which can be used as a proxy and mini-job system for running web3-batch-call requests.
+The service is exposing the following JSON endpoints on port `8000`:
+- `/live` for current state changes this creates a Prometheus exporter which can be scraped by prometheus or victoria-metrics. This runs in an endless loop until you stop it.
+- `/metrics` For compatibility reasons, there is also a prometheus exporter that exposes live data which can be used by a prometheus scraper.
+- `/historical` for historical data you have to provide the query params `startBlock` and `endBlock` so that all blocks between will be scraped.
 
 ## Configuration
 To demonstrate its usage, there is `stack` dir with a `docker-compose.yml` file which contains all the cookies.
@@ -21,35 +24,31 @@ The easiest way is to add them to your local `stack/.env` file.
 ## Build & Run
 `cd stack && ./run.sh`
 
-## POSTing data to prometheus
-To start the request with all yearn vaults and strategies there is a `stack/sample_request.json` which can be tested with:
+## Examples
+To start the request with all [yearn](https://yearn.finance) vaults and strategies there is a `stack/sample_request.json` which can be tested with:
 
-`cd stack && ./post.sh`
+### Live data
+`curl -X POST -H 'Content-Type: application/json' -d@stack/sample_request.json "http://localhost:8000/live"`
+Once started, there will be a new batched call and a push to victoria-metrics with the results every minute.
 
-Once started, there will be a new batched call and a push to prometheus with the results every minute.
+### Historical data
+`curl -X POST -H 'Content-Type: application/json' -d@stack/sample_request.json "http://localhost:8000/historical?startBlock=11460686&endBlock=11460690"`
+This will query all the the requested blocks and push them to the timeseries db.
 
-You can CTRL-C this safely, the worker will continue querying and pushing data in the background.
 
-```
-calling web3-batch-service...
-2020/12/08 19:40:25 Successfully exported 206 metrics to prometheus push gateway.
-```
+## Dockerized setup
+The following containers are started:
 
-## Viewing data
-The dockerized service is configured to push the data to prometheus push gateway which is scraped by prometheus.
-The data can be viewed directly in prometheus under: [http://localhost:9090](http://localhost:9090) or in Grafana under: [http://localhost:3000](http://localhost:3000) .
-The datapoints are labeled starting with their namespace like the following example:
+- `web3-batch-exporter` // the main container with the main service from this repo
+- `web3-batch-service`  // node-service bridge to communicate with the blockchain
+- `victoria-metrics`    // the timeseries db
+- `vmagent`             // the CLI tool that scrapes the metrics when using live mode
+- `grafana`             // visualize your data
 
-`strategies_0x25fAcA21dd2Ad7eDB3a027d543e617496820d8d6_balanceOf` references the `balanceOf` field of the `StrategyVaultUSDC`
+The data can be viewed directly in Grafana under: [http://localhost:3000](http://localhost:3000) .
 
-There is a `grafana_dashboard.json` file that can be loaded into the JSON model of grafana containing the following metrics:
-
+Here's a small screenshot:
 ![grafana_dashboard.png](https://raw.githubusercontent.com/mosdefi/web3-batch-exporter/main/grafana/grafana_dashboard.png)
-
-
-## Control flow
-The control flow is to POST a JSON to the service which registers a worker that runs the posted queries every minute until another request arrives.
-The worker itself first queries the web3-batch calls to the Ethereum blockchain, then parses and pushes any float64-convertible values to prometheus.
 
 
 ## Auto-conversions
@@ -68,3 +67,4 @@ There are some `TODO`s in the code namely:
 - parse nested results
 - maintain the scaling factor
 - add human-readable aliases to the gauges instead of the contract addresses
+- write some tests :joy: 
